@@ -50,12 +50,12 @@ class BruteForceLossAdvdelaySimulator:
 
                     adv_pos_in_scan_win = adv_ts - scan_cur_up_ts
                     base_prob -= discovery_prob
-                    latency2pdf[adv_ts] = (discovery_prob, adv_pos_in_scan_win)
+                    latency2pdf[adv_ts] = discovery_prob  # (discovery_prob, adv_pos_in_scan_win)
 
             scan_cur_up_ts += self.scan_interval
 
         if base_prob > 0:
-            latency2pdf[self.inf] = (base_prob, -1)
+            latency2pdf[self.inf] = base_prob  # (base_prob, -1)
         return latency2pdf
 
     def simulate_all(self, to_cdf=True):
@@ -71,73 +71,73 @@ class BruteForceLossAdvdelaySimulator:
             prob_accumulator.next_layer()
         adv_ts_delay_pdf = prob_accumulator.get_all_pdf()
 
-        delta2latency_pdf = [None]
-        for delta in range(1, self.max_advdelay * phase_projection_times + 1):
-            delta2latency_pdf.append(self.simulate_once(0, -delta))
+        phi_s_range = (0, self.adv_interval)
 
-        for first_scan_down_ts in range(self.adv_interval):
-            # START Base-case Simulation
-            latency2pdf = self.simulate_once(0, first_scan_down_ts)
+        for phi_s in range(*phi_s_range):
+            # START Base-Case Simulation
+            latencyxprob = np.asarray(list(self.simulate_once(0, phi_s).items()))
+            for (latency, prob) in latencyxprob:
+                self.latency_pdf[int(latency)] += prob
+            # END Base-Case Simulation
 
-            for latency, (prob, _) in latency2pdf.items():
-                self.latency_pdf[latency] += prob
-            # END Base-case Simulation
+            base_adv_ts = 0
+            adv_delay_max_range = 0
 
             # START Phase-Difference Projection
-            projection_times = (phase_projection_times + 1) if first_scan_down_ts < remain_cases \
-                else phase_projection_times
-            for projection_time in range(1, projection_times):
-                base_adv_ts = projection_time * self.adv_interval
-                adv_ts_delay_range = projection_time * self.max_advdelay
-                # if base_adv_ts + adv_ts_delay_range >= self.scan_interval:
-                #     adv_ts_delay_range -= (base_adv_ts + adv_ts_delay_range) - self.scan_interval + 1
-
+            for projection_time in range(1, phase_projection_times):
+                base_adv_ts += self.adv_interval
+                adv_delay_max_range += self.max_advdelay
                 delay_pdf = adv_ts_delay_pdf[projection_time - 1]
-                for adv_delay in range(first_scan_down_ts + 1, adv_ts_delay_range + 1):
-                    if delay_pdf[adv_delay] > 0:
-                        delta = adv_delay - first_scan_down_ts
-                        adv_ts = adv_delay + base_adv_ts
-                        for latency, (prob, _) in delta2latency_pdf[delta].items():
-                            if prob > 0:
-                                self.latency_pdf[min(self.inf, latency + adv_ts)] += \
-                                    prob * delay_pdf[adv_delay]
+                for delay in range(adv_delay_max_range + 1):
+                    adv_ts = base_adv_ts + delay
+                    delay_prob = delay_pdf[delay]
+                    for (latency, prob) in latencyxprob:
+                        self.latency_pdf[min(int(latency) + adv_ts, self.inf)] += prob * delay_prob
 
-                for adv_delay in range(0, min(adv_ts_delay_range, first_scan_down_ts) + 1):
-                    if delay_pdf[adv_delay] > 0:
-                        adv_ts = adv_delay + base_adv_ts
-                        for latency, (prob, _) in latency2pdf.items():
-                            if prob > 0:
-                                self.latency_pdf[min(self.inf, latency + adv_ts)] += \
-                                    prob * delay_pdf[adv_delay]
-
+            # special check of last projection
+            projection_time = phase_projection_times
+            base_adv_ts += self.adv_interval
+            adv_delay_max_range += self.max_advdelay
+            delay_pdf = adv_ts_delay_pdf[projection_time - 1]
+            for delay in range(adv_delay_max_range + 1):
+                adv_ts = base_adv_ts + delay
+                scan_win_end_ts = adv_ts + phi_s
+                if scan_win_end_ts > self.scan_interval:
+                    break
+                delay_prob = delay_pdf[delay]
+                for (latency, prob) in latencyxprob:
+                    self.latency_pdf[min(int(latency) + adv_ts, self.inf)] += prob * delay_prob
             # END Phase-Difference Projection
 
         phase_projection_latency_pdf = self.latency_pdf.copy()
 
+        # START Range-Entrance Projection
         for latency, prob in enumerate(phase_projection_latency_pdf):
             if prob > 0:
                 for phi_s in range(1, self.adv_interval):
                     self.latency_pdf[min(self.inf, latency + phi_s)] += prob
+        # END Range-Entrance Projection
 
+        # Output process
         prob_sum = sum(self.latency_pdf)
         pdf = self.latency_pdf / prob_sum
-
         if to_cdf:
             cdf = np.cumsum(pdf)
             cdf[-1] = 1.0
             return cdf
-
         return pdf
+
 
 # TODO: Faster Projection
 class DynamicProjectionLossAdvdelaySimulator(BruteForceLossAdvdelaySimulator):
     def __init__(self):
         pass
 
+
 if __name__ == '__main__':
     blender = BruteForceLossAdvdelaySimulator(adv_interval=1860,
-                                    scan_interval=5120,
-                                    scan_window=512,
-                                    end_time=50000,
-                                    loss_rate=0)
+                                              scan_interval=5120,
+                                              scan_window=512,
+                                              end_time=50000,
+                                              loss_rate=0)
     blender.simulate_all()
