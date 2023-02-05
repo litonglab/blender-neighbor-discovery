@@ -1,9 +1,11 @@
+import random
+from simulator.coverage import AlternationBroadcastConfig
 from utils import Log
 import numpy as np
 import os
 
 
-TIMEOUT_NOTIFIER = 10
+TIMEOUT_NOTIFIER = 1
 LOG_ROOT = os.path.join('C:/code', 'traces')
 
 class AbstractSimulator:
@@ -14,7 +16,7 @@ class AbstractSimulator:
             raise ValueError("Invalid simulation end time.")
         if fail_rate < 0 or fail_rate > 100:
             Log.W('Simulator Initializing', 'Invalid fail rate provided. Fail rate set to 0%.')
-            fail_rate = 0 if fail_rate <   0 else 100
+            fail_rate = 0 if fail_rate < 0 else 100
         self.scan_interval = scan_interval
         self.scan_window = scan_window
         self.end_time = end_time
@@ -113,3 +115,35 @@ class PureBleSimulator(AbstractSimulator):
        # print(scan_seq, adv_seq)
         return self.end_time + TIMEOUT_NOTIFIER
 
+class AlternationBroadcastSampler(AbstractSimulator):
+    def __init__(self, abp_config: AlternationBroadcastConfig, scan_interval, scan_window, end_time, loss_rate=0):
+        super().__init__(scan_interval, scan_window, end_time, fail_rate=loss_rate, max_advdelay=0)
+        self.abp_config = abp_config
+
+    def to_identifier_string(self):
+        return 'ABP_W%d_T%d_F%d_E%d' % \
+               (self.scan_window, self.scan_interval, self.fail_rate, self.end_time)
+
+    def simulate_once(self):
+        start_adv_seq_index, phi_a = self.abp_config.rand_start()
+        self.abp_config.set_seq_start_index(start_adv_seq_index)
+        phi_s = random.randint(0, self.scan_interval)
+        adv_ts = phi_a
+        scan_down_ts = phi_s
+        scan_up_ts = phi_s - self.scan_window
+        while scan_up_ts <= self.end_time:
+            while scan_up_ts > adv_ts:
+                adv_ts += self.abp_config.next_interval()
+            if adv_ts > self.end_time:
+                return self.end_time + TIMEOUT_NOTIFIER
+            while adv_ts < scan_down_ts and adv_ts <= self.end_time:
+                if self.fail_rate == 0 or self.fail_rate / 100 < np.random.random():
+                    return adv_ts
+                adv_ts += self.abp_config.next_interval()
+
+            scan_down_ts += self.scan_interval
+            scan_up_ts = scan_down_ts - self.scan_window
+        return self.end_time + TIMEOUT_NOTIFIER
+
+    def get_latency_n_times(self, n, to_file=False, cover_file=False, file_prefix=LOG_ROOT + 'alternationBroadcast/'):
+        return super().get_latency_n_times(n=n, to_file=to_file, cover_file=cover_file, file_prefix=file_prefix)

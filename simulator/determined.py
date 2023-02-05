@@ -4,6 +4,7 @@ from algo.accumulator import ProbabilitySummationAccumulator
 
 
 class BruteForceLossAdvdelaySimulator:
+    __slots__ = ['adv_interval', 'scan_interval', 'scan_window', 'end_time', 'inf', 'latency_pdf', 'winpos2latency', 'loss_rate_percentage', 'loss_rate', 'max_advdelay']
     def __init__(self, adv_interval, scan_interval, scan_window, end_time, loss_rate=0, max_advdelay=10):
         self.adv_interval = adv_interval
         self.scan_interval = scan_interval
@@ -58,11 +59,15 @@ class BruteForceLossAdvdelaySimulator:
             latency2pdf[self.inf] = base_prob  # (base_prob, -1)
         return latency2pdf
 
+    def simulate_all_ta_le_ts(self, to_cdf):
+
+        raise NotImplementedError(r"Validity of this implementation when $T_a < d_s$ is under discussion.")
+
     def simulate_all(self, to_cdf=True):
         if self.scan_interval <= self.adv_interval:
             raise NotImplementedError(r"$T_a > T_s$ is under refining.")
         if self.adv_interval <= self.scan_window:
-            raise NotImplementedError(r"Validity of this implementation when $T_a < d_s$ is under discussion.")
+            self.simulate_all_ta_le_ts(to_cdf)
         phase_projection_times = self.scan_interval // self.adv_interval
         remain_cases = self.scan_interval % self.adv_interval
         prob_accumulator = ProbabilitySummationAccumulator(self.max_advdelay)
@@ -129,10 +134,13 @@ class BruteForceLossAdvdelaySimulator:
 
 
 # TODO: Faster Projection
-class DynamicProjectionLossAdvdelaySimulator(BruteForceLossAdvdelaySimulator):
-    def __init__(self):
-        pass
+# class DynamicProjectionLossAdvdelaySimulator(BruteForceLossAdvdelaySimulator):
+#     __slots__ = super.__slots__ + []
+#     def __init__(self, adv_interval, scan_interval, scan_window, end_time, loss_rate=0, max_advdelay=10):
+#         super().__init__(adv_interval, scan_interval, scan_window, end_time, loss_rate, max_advdelay)
+#         self.basecase_range()
 
+        
 
 if __name__ == '__main__':
     blender = BruteForceLossAdvdelaySimulator(adv_interval=1860,
