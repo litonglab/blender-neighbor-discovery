@@ -1,0 +1,15 @@
+@inproceedings{ding2022blender,
+  title={Blender: Toward Practical Simulation Framework for BLE Neighbor Discovery},
+  author={Ding, Yukuan and Li, Tong and Liang, Jiaxin and Wang, Dan},
+  booktitle={ACM MSWiM},
+  pages={103--110},
+  year={2022}
+}
+
+@inproceedings{li2023on,
+  title={On Design and Performance of Offline Finding Network},
+  author={Li, Tong and Liang, Jiaxin and Wang, Dan and Ding, Yukuan and Zheng, Kai and Zhang, Xu and Xu, Ke},
+  booktitle={IEEE INFOCOM},
+  pages={1--10},
+  year={2023}
+}
